@@ -1,0 +1,58 @@
+# Spec files
+
+A spec file is the single source of truth for a native module. It is a plain TypeScript file whose interfaces drive codegen for both sides of the bridge.
+
+## Rules
+
+1. **Filename** — any `.spec.ts` file is a valid input to `yolk-codegen`.
+2. **Interface name** — must end with `Spec`. The module name is derived by stripping the suffix: `CounterSpec` → module named `Counter`.
+3. **Return types** — every method must return `Promise<T>`. Synchronous methods are not supported across the bridge.
+4. **Supported types** — `string`, `number`, `boolean`, `void`, `null`, arrays, and plain objects. Generics and union types beyond `T | null` are not yet supported.
+
+## Example
+
+```typescript
+export interface StorageSpec {
+  get(key: string): Promise<string | null>
+  set(key: string, value: string): Promise<void>
+  delete(key: string): Promise<void>
+}
+```
+
+## What codegen produces
+
+From the spec above, `yolk-codegen` generates:
+
+**Swift** — a protocol with a dispatch table:
+
+```swift
+public protocol StorageModule: YolkModule {
+    func get(key: String) async throws -> String?
+    func set(key: String, value: String) async throws -> Void
+    func delete(key: String) async throws -> Void
+}
+```
+
+**TypeScript** — a proxy class:
+
+```typescript
+export class Storage extends NativeModule {
+  get(key: string): Promise<string | null> { ... }
+  set(key: string, value: string): Promise<void> { ... }
+  delete(key: string): Promise<void> { ... }
+}
+```
+
+## One spec, all platforms
+
+The spec file lives in your shared `logic/` directory. Codegen targets differ per platform:
+
+```sh
+# macOS
+yolk-codegen storage.spec.ts ./macos/Generated ./logic/src/generated
+
+# iOS (future)
+yolk-codegen storage.spec.ts ./ios/Generated ./logic/src/generated
+```
+
+The TypeScript output is the same for all platforms. Only the Swift (or Kotlin, or C) output changes.

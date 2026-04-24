@@ -1,0 +1,61 @@
+# YolkValue
+
+The only type that crosses the bridge. An immutable, Sendable value-type enum.
+
+```swift
+public indirect enum YolkValue: Sendable {
+    case null
+    case bool(Bool)
+    case int(Int)
+    case double(Double)
+    case string(String)
+    case array([YolkValue])
+    case object([String: YolkValue])
+}
+```
+
+## Design rationale
+
+`YolkValue` is a value type (enum). Nothing that crosses the bridge is a shared reference. This prevents the category of memory bugs where JS holds a reference to a Swift object that has since been deallocated (or vice versa).
+
+## Literals
+
+`YolkValue` conforms to all standard literal protocols:
+
+```swift
+let v1: YolkValue = "hello"        // .string
+let v2: YolkValue = 42             // .int
+let v3: YolkValue = 3.14           // .double
+let v4: YolkValue = true           // .bool
+let v5: YolkValue = nil            // .null
+let v6: YolkValue = [1, 2, 3]     // .array
+let v7: YolkValue = ["x": 1]      // .object
+```
+
+## Codable
+
+`YolkValue` conforms to `Codable`. You can encode it to/from JSON if needed, though values normally cross the bridge without serialisation.
+
+```swift
+let json = try JSONEncoder().encode(someValue)
+let back = try JSONDecoder().decode(YolkValue.self, from: json)
+```
+
+## Pattern matching
+
+```swift
+switch value {
+case .string(let s): print(s)
+case .int(let n):    print(n)
+case .null:          print("nothing")
+default:             break
+}
+```
+
+## Safe array access
+
+Collections have a `[safe:]` subscript to avoid out-of-bounds crashes in generated dispatch code:
+
+```swift
+let first = args[safe: 0] ?? .null
+```

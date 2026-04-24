@@ -1,0 +1,120 @@
+# Getting started
+
+This guide walks you through creating your first Yolk module on macOS.
+
+## Prerequisites
+
+- Node 18+ and pnpm
+- Xcode 15+
+- Swift 5.9+
+
+## Install
+
+Clone the repo and install dependencies:
+
+```sh
+git clone https://github.com/laibulle/yolk
+cd yolk
+pnpm install
+pnpm -r build
+```
+
+## 1. Write a spec
+
+Create a file ending in `.spec.ts`. Each method must return `Promise<T>`.
+
+```typescript
+// counter.spec.ts
+export interface CounterSpec {
+  increment(by: number): Promise<number>;
+  decrement(by: number): Promise<number>;
+  reset(): Promise<void>;
+  value(): Promise<number>;
+}
+```
+
+## 2. Run codegen
+
+```sh
+yolk-codegen counter.spec.ts ./macos/Generated ./logic/src/generated
+```
+
+This produces two files:
+
+- `macos/Generated/CounterModule.swift` — the Swift protocol and dispatch table
+- `logic/src/generated/Counter.ts` — the TypeScript proxy class
+
+## 3. Implement in Swift
+
+The generated protocol uses the convention `<Name>Module`. Implement it with a Swift `actor`:
+
+```swift
+actor AppCounterModule: CounterModule {
+    private var count = 0.0
+
+    func increment(by: Double) async throws -> Double {
+        count += by
+        return count
+    }
+
+    func decrement(by: Double) async throws -> Double {
+        count -= by
+        return count
+    }
+
+    func reset() async throws {
+        count = 0
+    }
+
+    func value() async throws -> Double {
+        count
+    }
+}
+```
+
+Using `actor` is not required by the protocol, but it is the idiomatic choice: the actor's executor serialises access without any manual locking.
+
+## 4. Write your TypeScript logic
+
+```typescript
+// logic/src/index.ts
+import { Counter } from "./generated/Counter";
+
+const counter = new Counter();
+
+export async function increment() {
+  return counter.increment(1);
+}
+
+export async function reset() {
+  return counter.reset();
+}
+
+export async function getCount() {
+  return counter.value();
+}
+```
+
+## 5. Bundle
+
+Build the TypeScript bundle with esbuild:
+
+```sh
+esbuild logic/src/index.ts --bundle --outfile=macos/logic.js --platform=neutral
+```
+
+## 6. Wire it up in Swift
+
+```swift
+import Yolk
+
+let runtime = YolkRuntime()
+runtime.register(AppCounterModule())
+
+try runtime.load(url: Bundle.main.url(forResource: "logic", withExtension: "js")!)
+
+// Call an exported function
+let count = try await runtime.call("getCount")
+```
+
+That's it. Your TypeScript logic runs inside JavaScriptCore, bridged into your native SwiftUI app.

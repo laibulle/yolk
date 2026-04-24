@@ -1,0 +1,22 @@
+# Android
+
+Android support is planned. The JavaScript engine on Android will differ from Apple platforms.
+
+## Status
+
+- [ ] Engine selection (V8 via J2V8, QuickJS, or Hermes)
+- [ ] Kotlin bridge implementation
+- [ ] Codegen Kotlin target
+- [ ] Example app
+
+## Engine candidates
+
+| Engine      | Pros                           | Cons                   |
+| ----------- | ------------------------------ | ---------------------- |
+| **V8**      | Full ES2022, familiar          | Large binary (+8MB)    |
+| **QuickJS** | Tiny (~1MB), embeddable        | Slower, fewer features |
+| **Hermes**  | Built for mobile, fast startup | Facebook dependency    |
+
+The TypeScript spec files and business logic will not change between platforms — only the native bridge implementation differs.
+
+Watch the [GitHub repository](https://github.com/laibulle/yolk) for updates.

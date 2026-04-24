@@ -1,0 +1,73 @@
+# YolkRuntime
+
+The main entry point. Create one instance per application.
+
+```swift
+import Yolk
+
+let runtime = YolkRuntime()
+```
+
+## Methods
+
+### `register(_:)`
+
+Register a native module before loading the bundle.
+
+```swift
+func register(_ module: some YolkModule)
+```
+
+Must be called before `load`. Registers the module under `YolkModule.moduleName` and installs a JS global that TypeScript can call.
+
+```swift
+runtime.register(StorageModule())
+runtime.register(NetworkModule())
+```
+
+---
+
+### `load(url:)`
+
+Load a compiled JavaScript bundle from a file URL.
+
+```swift
+func load(url: URL) throws
+```
+
+```swift
+try runtime.load(url: Bundle.main.url(forResource: "logic", withExtension: "js")!)
+```
+
+Throws `YolkError.jsException` if the script throws during evaluation.
+
+---
+
+### `load(script:sourceURL:)`
+
+Load a JavaScript bundle from a string, with an optional source URL for stack traces.
+
+```swift
+func load(script: String, sourceURL: URL? = nil) throws
+```
+
+---
+
+### `call(_:args:)`
+
+Call a top-level exported function and await its result.
+
+```swift
+func call(_ function: String, args: [YolkValue] = []) async throws -> YolkValue
+```
+
+If the function returns a Promise, `call` waits for it to settle. If the Promise rejects, the error is thrown as `YolkError.jsException`.
+
+```swift
+let result = try await runtime.call("getUser", args: [.int(42)])
+```
+
+## Notes
+
+- `YolkRuntime` is `@unchecked Sendable`. Its internal state is protected by the JS queue.
+- All JS execution happens on an internal serial queue. `call` is safe to invoke from any context including the main actor.

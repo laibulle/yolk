@@ -1,0 +1,74 @@
+# The bridge
+
+The bridge is the layer between the JavaScript runtime and native code. Yolk's bridge is designed around three principles: **value ownership**, **explicit dispatch**, and **no shared mutable state**.
+
+## How a call works
+
+When TypeScript calls a native module method, this is what happens:
+
+```
+TypeScript                    Bridge                     Swift
+──────────                    ──────                     ─────
+counter.increment(1)
+  │
+  └─▶ __yolk_native_Counter("increment", [1])
+           │
+           ├─▶ Create JS Promise (id=42)
+           ├─▶ Return promise to caller  ──▶ TypeScript awaits
+           │
+           └─▶ Task {
+                 await module.handle("increment", [.double(1)])
+                     │
+                     └─▶ actor CounterModule
+                               │
+                               └─▶ increment(by: 1.0) ──▶ 6.0
+                 }
+                     │
+                     └─▶ jsQueue.async {
+                               __yolk.resolve(42, 6.0)
+                               drainMicrotasks()       ──▶ Promise resolves
+                         }
+```
+
+The key points:
+- The Promise is created and returned **synchronously** on the JS thread
+- The Swift work happens **asynchronously** on the actor's executor
+- Resolution is dispatched **back onto the JS thread**, then microtasks are drained explicitly
+
+## Value types
+
+Every value that crosses the bridge is a `YolkValue` — a value-type enum:
+
+```swift
+public indirect enum YolkValue: Sendable {
+    case null
+    case bool(Bool)
+    case int(Int)
+    case double(Double)
+    case string(String)
+    case array([YolkValue])
+    case object([String: YolkValue])
+}
+```
+
+`YolkValue` is `Sendable` and has no identity — it is always copied, never shared. This eliminates the class of memory bugs React Native encountered with shared object references across the bridge.
+
+## Microtask draining
+
+JavaScriptCore does not have a built-in event loop. When the JS call stack is empty, Promises do not automatically settle — the microtask queue must be drained manually.
+
+Yolk does this by calling `context.evaluateScript("")` after every bridge resolution. This is an internal implementation detail; it is not something you need to think about as a consumer.
+
+## Error propagation
+
+If a Swift method throws, the error is caught by the bridge and used to reject the Promise:
+
+```typescript
+try {
+  await counter.increment(1)
+} catch (e) {
+  console.error(e.message) // Swift error message
+}
+```
+
+On the Swift side, all thrown errors propagate through `YolkError.methodFailed`.

@@ -1,0 +1,76 @@
+# Threading
+
+Yolk uses three distinct execution contexts. Understanding which code runs where prevents deadlocks and race conditions.
+
+## The three contexts
+
+### JS thread
+
+A dedicated serial `DispatchQueue` (`dev.yolk.js`). All JavaScriptCore operations happen here:
+
+- Evaluating the bundle
+- Executing TypeScript functions called from Swift
+- Receiving Promise resolutions from Swift modules
+- Draining the microtask queue
+
+**Rule:** Never access the `JSContext` from any other thread.
+
+### Actor executors
+
+Each Swift module runs on its own actor executor. When JS calls a module method, the bridge dispatches an async `Task` — the actor serialises access on its own. Multiple modules can run concurrently; methods on the same module are serialised.
+
+```swift
+actor StorageModule: StorageModule {
+    // Swift guarantees: only one method runs at a time on this actor
+    private var store: [String: String] = [:]
+
+    func get(key: String) async throws -> String? {
+        store[key]  // safe — actor provides mutual exclusion
+    }
+}
+```
+
+### Main thread
+
+Untouched by Yolk. Your SwiftUI views run here. When you call `runtime.call(...)` from a SwiftUI view, the call is dispatched onto the JS thread under the hood; the `await` suspends the caller (not the main thread).
+
+```swift
+// SwiftUI — main thread
+Button("Increment") {
+    Task {
+        let count = try await runtime.call("increment")
+        self.count = count.intValue  // back on MainActor via @MainActor
+    }
+}
+```
+
+## Thread diagram
+
+```
+Main thread          JS thread           Actor executor(s)
+───────────          ─────────           ─────────────────
+SwiftUI
+  │
+  └─▶ runtime.call("fn")
+           │
+           └─▶ jsQueue.async ──▶ fn()
+                                  │
+                                  └─▶ __yolk_native_Module(...)
+                                             │
+                                             └─▶ Task { await module.handle(...) }
+                                                          │
+                                                          └─▶ [actor runs here]
+                                                                    │
+                                                          jsQueue.async { resolve() }
+                                                                    │
+                                             ◀──────────────────────┘
+                                  Promise settles
+           ◀────────────────────────────────────────
+  ◀────────┘
+```
+
+## Avoiding deadlocks
+
+- Do not call `runtime.call` synchronously from code already running on `jsQueue`.
+- Do not hold locks in a Swift module that are also held by the main thread.
+- Do not dispatch back to the main thread synchronously from a module method — use `await MainActor.run { ... }` instead.

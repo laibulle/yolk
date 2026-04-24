@@ -1,0 +1,33 @@
+# Overview
+
+Yolk is a framework for writing app business logic in TypeScript and running it inside a native application. The native UI layer — currently SwiftUI on macOS — stays fully native. Yolk provides the bridge between the two.
+
+## The idea
+
+Native apps split into two concerns: **what the app does** (business logic) and **how it looks** (UI). Yolk lets you write the first part in TypeScript — once, for all platforms — and leave the second part to each platform's best-in-class UI toolkit.
+
+The TypeScript bundle runs on an embedded JavaScript engine (JavaScriptCore on Apple platforms). Your SwiftUI code calls into it; TypeScript calls back into Swift for platform capabilities like storage, networking, or notifications.
+
+## What Yolk is not
+
+- **Not a UI framework.** There are no Yolk components. Your SwiftUI code is fully under your control.
+- **Not a web view.** The TypeScript bundle runs in a JS engine, not a browser. There is no DOM.
+- **Not React Native.** There is no virtual DOM, no bridge batching, no shadow thread.
+
+## How types flow
+
+The boundary between TypeScript and Swift is typed end-to-end from a single source of truth:
+
+```
+playground.spec.ts
+    │
+    ├──▶ codegen ──▶ PlaygroundModule.swift   (implement this with an actor)
+    └──▶ codegen ──▶ Playground.ts            (use this in your TypeScript)
+```
+
+Type mismatches are caught at compile time, not at runtime.
+
+## Next steps
+
+- [Getting started](/docs/getting-started) — install Yolk and build your first module
+- [Concepts](/docs/concepts/spec-files) — understand how the spec → codegen → implementation pipeline works

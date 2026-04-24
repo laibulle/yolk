@@ -1,0 +1,12 @@
+{
+  "name": "@yolk-examples/playground-logic",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=browser --format=iife --outfile=../macos/PlaygroundApp/logic.js && esbuild src/index.ts --bundle --platform=browser --format=iife --outfile=../ios/PlaygroundApp/logic.js && esbuild src/index.ts --bundle --platform=browser --format=iife --outfile=../android/app/src/main/res/raw/logic.js",
+    "dev": "esbuild src/index.ts --bundle --platform=browser --format=iife --outfile=../macos/PlaygroundApp/logic.js --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.0",
+    "typescript": "^5.4.0"
+  }
+}

@@ -1,0 +1,53 @@
+# macOS
+
+macOS is the first supported platform. The Yolk Swift package targets macOS 14+.
+
+## Setup
+
+Add the Yolk Swift package to your Xcode project via Swift Package Manager:
+
+```
+https://github.com/laibulle/yolk
+```
+
+Or add it as a local dependency in `Package.swift`:
+
+```swift
+.package(path: "../../packages/swift")
+```
+
+## JavaScript engine
+
+On macOS, Yolk uses **JavaScriptCore** — the same engine that powers Safari. It ships with the OS, so there is no additional binary to bundle.
+
+## Bundle delivery
+
+The compiled TypeScript bundle should be included in your app bundle. Add the `.js` file to your Xcode target, then load it at runtime:
+
+```swift
+let url = Bundle.main.url(forResource: "logic", withExtension: "js")!
+try runtime.load(url: url)
+```
+
+## Example structure
+
+```
+MyApp/
+  logic/                    ← TypeScript (shared across platforms)
+    src/
+      index.ts
+      generated/
+    storage.spec.ts
+  macos/                    ← macOS-specific
+    MyApp.xcodeproj
+    Generated/              ← Generated Swift protocols
+      StorageModule.swift
+    Sources/
+      AppStorageModule.swift
+      ContentView.swift
+      logic.js              ← Compiled TypeScript bundle
+```
+
+## Minimum deployment target
+
+macOS 14 (Sonoma). This is required for Swift strict concurrency and the actor features Yolk depends on.

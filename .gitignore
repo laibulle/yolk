@@ -1,0 +1,16 @@
+.build/
+dist/
+node_modules/
+.vercel/
+.env.local
+.env.*.local
+.vercel
+**/*.xcodeproj
+.DS_Store
+.swiftpm/
+.next/
+.idea/
+build/
+*.log
+.gradle/
+Generated/
