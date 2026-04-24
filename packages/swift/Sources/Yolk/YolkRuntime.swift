@@ -20,6 +20,26 @@ public final class YolkRuntime: @unchecked Sendable {
         var pending = {};
         var nextId = 0;
         return {
+            fromHex: function(hex) {
+                var len = hex.length >> 1;
+                var u8 = new Uint8Array(len);
+                for (var i = 0; i < len; i++) {
+                    var high = hex.charCodeAt(i * 2);
+                    var low = hex.charCodeAt(i * 2 + 1);
+                    u8[i] = ((high < 58 ? high - 48 : (high < 91 ? high - 55 : high - 87)) << 4) |
+                             (low < 58 ? low - 48 : (low < 91 ? low - 55 : low - 87));
+                }
+                return u8.buffer;
+            },
+            toHex: function(buf) {
+                var u8 = new Uint8Array(buf);
+                var hex = new Array(u8.length);
+                for (var i = 0; i < u8.length; i++) {
+                    var b = u8[i];
+                    hex[i] = (b < 16 ? '0' : '') + b.toString(16);
+                }
+                return hex.join('');
+            },
             createPromise: function() {
                 var id = nextId++;
                 var p = new Promise(function(resolve, reject) {
@@ -94,6 +114,24 @@ public final class YolkRuntime: @unchecked Sendable {
     public func evaluate(_ script: String) -> Data {
         jsQueue.sync {
             context.evaluateScript(script).toData()
+        }
+    }
+
+    /// Call a JS function and return immediately without waiting for any result or Promise.
+    /// Useful for event-like dispatches where the result is handled via an Observer.
+    public func fireAndForget(_ function: String, args: Data) {
+        jsQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Use zero-copy JSValue.from instead of hex encoding for better performance
+            let jsArgsBuffer = JSValue.from(data: args, in: self.context)
+            if let yolk = self.context.objectForKeyedSubscript("__yolk"),
+               let callFn = yolk.objectForKeyedSubscript("call"),
+               !callFn.isUndefined {
+                callFn.call(withArguments: [function, jsArgsBuffer])
+            }
+            
+            self.drainMicrotasks()
         }
     }
 

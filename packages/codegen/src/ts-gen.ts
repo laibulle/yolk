@@ -17,8 +17,7 @@ export function generateTS(spec: ModuleSpec): string {
     if (method.returnType === "void") {
       lines.push(`    await this.call("${method.name}", ${method.params.map((p) => p.name).join(", ")})`)
     } else {
-      lines.push(`    const resultBuffer = await this.call("${method.name}", ${method.params.map((p) => p.name).join(", ")}) as ArrayBuffer;`)
-      lines.push(`    return YolkBin.decode(resultBuffer) as ${method.returnType};`)
+      lines.push(`    return this.call("${method.name}", ${method.params.map((p) => p.name).join(", ")})`)
     }
     lines.push(`  }`)
     lines.push(``)

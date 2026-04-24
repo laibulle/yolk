@@ -17,6 +17,7 @@ final class PlaygroundViewModel: ObservableObject {
         rt.register(NativeObserverModule<PlaygroundState> { newState in
             Task { @MainActor in
                 self.state = newState
+                self.isLoading = false
             }
         })
 
@@ -37,10 +38,13 @@ final class PlaygroundViewModel: ObservableObject {
         }
     }
 
-    func increment() async { await dispatch("increment", args: [1.0]) }
-    func decrement() async { await dispatch("decrement", args: [1.0]) }
-    func reset()     async { await dispatch("reset") }
-    func fetchActivity() async { await dispatch("fetchActivity") }
+    func increment() { dispatch("increment", args: [1.0]) }
+    func decrement() { dispatch("decrement", args: [1.0]) }
+    func reset()     { dispatch("reset") }
+    func fetchActivity() { 
+        isLoading = true
+        dispatch("fetchActivity") 
+    }
 
     func testBinaryBridge() async {
         guard let runtime else { return }
@@ -78,12 +82,10 @@ final class PlaygroundViewModel: ObservableObject {
         }
     }
 
-    private func dispatch(_ fn: String, args: [Any?] = []) async {
-        guard let runtime, !isLoading else { return }
-        isLoading = true
-        defer { isLoading = false }
+    private func dispatch(_ fn: String, args: [Any?] = []) {
+        guard let runtime else { return }
         do {
-            _ = try await runtime.call(fn, args: try YolkBin.encode(args))
+            runtime.fireAndForget(fn, args: try YolkBin.encode(args))
         } catch {
             print("[Playground] \(fn) failed: \(error)")
         }

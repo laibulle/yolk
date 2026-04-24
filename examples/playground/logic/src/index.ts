@@ -1,4 +1,5 @@
 import { Http } from "./generated/Http"
+import { YolkBin } from "@yolk/sdk"
 import { createStore, notifyNative } from "@yolk/store"
 
 // Minimal fetch polyfill using our Native Http module
@@ -59,15 +60,21 @@ async function getState(): Promise<State> {
 }
 
 async function fetchActivity(): Promise<State> {
+  console.log("[JS] fetchActivity started");
   let activity: string
   try {
     const res = await fetch("https://dummyjson.com/quotes/random")
+    console.log("[JS] fetch completed, status: " + res.ok);
     const data = await res.json()
+    console.log("[JS] data received: " + JSON.stringify(data).substring(0, 100) + "...");
     activity = data.quote ? `"${data.quote}" — ${data.author}` : "Stay inspired!"
-  } catch {
+  } catch (err) {
+    console.error("[JS] fetchActivity failed: " + err.message);
     activity = "Failed to fetch quote"
   }
+  console.log("[JS] committing activity: " + activity);
   const { state } = store.commit({ activity })
+  console.log("[JS] commit finished, current count: " + state.count);
   return state
 }
 
@@ -87,6 +94,7 @@ const exports = {
   fetchActivity,
   subscribe,
   processBuffer,
+  YolkBin,
 }
 
 Object.assign(globalThis, exports)
