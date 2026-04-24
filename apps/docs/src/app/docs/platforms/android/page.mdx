@@ -1,22 +1,59 @@
 # Android
 
-Android support is planned. The JavaScript engine on Android will differ from Apple platforms.
+Yolk on Android is powered by the **QuickJS** engine, providing a lightweight and high-performance environment for shared TypeScript logic.
 
-## Status
+## Architecture
 
-- [ ] Engine selection (V8 via J2V8, QuickJS, or Hermes)
-- [ ] Kotlin bridge implementation
-- [ ] Codegen Kotlin target
-- [ ] Example app
+The Android implementation mirrors the Apple targets by using a **buffer-only** bridge. Data is transferred between the Kotlin runtime and the QuickJS engine via raw `ByteArray` and `ByteBuffer` objects, avoiding the overhead of JSON serialization.
 
-## Engine candidates
+### JS Engine: QuickJS
+We use `app.cash.quickjs:quickjs-android`. QuickJS is ideal for Android because:
+-   **Low Memory Footprint**: Significantly lighter than V8 or JSC.
+-   **Fast Startup**: Near-instant initialization.
+-   **Modern JS Support**: Excellent support for ES2023 features and Promises.
 
-| Engine      | Pros                           | Cons                   |
-| ----------- | ------------------------------ | ---------------------- |
-| **V8**      | Full ES2022, familiar          | Large binary (+8MB)    |
-| **QuickJS** | Tiny (~1MB), embeddable        | Slower, fewer features |
-| **Hermes**  | Built for mobile, fast startup | Facebook dependency    |
+## Data Transfer (YolkBin)
 
-The TypeScript spec files and business logic will not change between platforms — only the native bridge implementation differs.
+All communication uses the **YolkBin** TLV binary protocol. In Kotlin, this is implemented using `java.nio.ByteBuffer`, allowing for efficient byte-level manipulation.
 
-Watch the [GitHub repository](https://github.com/laibulle/yolk) for updates.
+### Zero-Copy (Direct Buffers)
+When passing large datasets from Kotlin to JS, we utilize `ByteBuffer.allocateDirect()`. This memory lives outside the Java heap, and the QuickJS bridge can access it with minimal intermediate copying.
+
+## Example: Native Module
+
+To create a native module in Android, implement the `YolkModule` interface:
+
+```kotlin
+class NativeStorageModule : YolkModule {
+    override val name: String = "Storage"
+
+    override suspend fun handle(method: String, args: ByteBuffer): ByteBuffer {
+        val argArray = (YolkBin.decode(args) as? List<*>) ?: emptyList<Any?>()
+        
+        return when (method) {
+            "save" -> {
+                val key = argArray[0] as String
+                val data = argArray[1] as ByteBuffer
+                // Perform native storage operation...
+                YolkBin.encode(true)
+            }
+            else -> throw IllegalArgumentException("Unknown method $method")
+        }
+    }
+}
+```
+
+## State Management
+
+The Android implementation supports the **Reactive SSOT** model. By registering a `NativeObserverModule` in your `YolkRuntime`, your Jetpack Compose UI can reactively observe the JS state:
+
+```kotlin
+val runtime = YolkRuntime()
+runtime.register(NativeObserverModule { map ->
+    // Update your Compose state or ViewModel
+    val newState = PlaygroundState(
+        count = (map["count"] as? Double)?.toInt() ?: 0,
+        // ...
+    )
+})
+```

@@ -56,6 +56,7 @@ final class PlaygroundViewModel: ObservableObject {
             for i in 0..<size {
                 ptr[i] = UInt8(i % 256)
             }
+            print("[Playground] Native buffer pointer: \(ptr.baseAddress!)")
         }
         
         let start = CFAbsoluteTimeGetCurrent()
@@ -66,6 +67,10 @@ final class PlaygroundViewModel: ObservableObject {
             if let returnedData = try YolkBin.decode(resultBuffer) as? Data {
                 let duration = (end - start) * 1000
                 print("[Playground] Binary bridge roundtrip: \(size) bytes in \(String(format: "%.2f", duration))ms")
+                
+                returnedData.withUnsafeBytes { ptr in
+                    print("[Playground] Returned buffer pointer: \(ptr.baseAddress!)")
+                }
                 
                 // Verify first few bytes
                 let firstByte = returnedData[0]

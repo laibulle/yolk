@@ -6,7 +6,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerValue
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -31,7 +30,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    PlaygroundScreen(viewModel)
+                    CounterScreen(viewModel)
                 }
             }
         }
@@ -39,11 +38,8 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun PlaygroundScreen(viewModel: PlaygroundViewModel) {
-    val count by viewModel.count.collectAsState()
-    val canIncrement by viewModel.canIncrement.collectAsState()
-    val canDecrement by viewModel.canDecrement.collectAsState()
-    val activity by viewModel.activity.collectAsState()
+fun CounterScreen(viewModel: PlaygroundViewModel) {
+    val state by viewModel.state.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isReady by viewModel.isReady.collectAsState()
 
@@ -56,7 +52,12 @@ fun PlaygroundScreen(viewModel: PlaygroundViewModel) {
             CircularProgressIndicator()
             Spacer(modifier = Modifier.height(16.dp))
             Text("Initializing runtime...")
+        } else if (state == null) {
+            CircularProgressIndicator()
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Synchronizing State...")
         } else {
+            val s = state!!
             Text(
                 text = "Yolk Playground",
                 fontSize = 32.sp,
@@ -66,7 +67,7 @@ fun PlaygroundScreen(viewModel: PlaygroundViewModel) {
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(
-                text = "Count: $count",
+                text = "Count: ${s.count}",
                 fontSize = 48.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -76,7 +77,7 @@ fun PlaygroundScreen(viewModel: PlaygroundViewModel) {
             Row {
                 Button(
                     onClick = { viewModel.decrement() },
-                    enabled = canDecrement && !isLoading
+                    enabled = s.canDecrement && !isLoading
                 ) {
                     Text("-")
                 }
@@ -90,7 +91,7 @@ fun PlaygroundScreen(viewModel: PlaygroundViewModel) {
                 Spacer(modifier = Modifier.width(16.dp))
                 Button(
                     onClick = { viewModel.increment() },
-                    enabled = canIncrement && !isLoading
+                    enabled = s.canIncrement && !isLoading
                 ) {
                     Text("+")
                 }
@@ -100,7 +101,7 @@ fun PlaygroundScreen(viewModel: PlaygroundViewModel) {
             HorizontalDivider()
             Spacer(modifier = Modifier.height(32.dp))
 
-            if (activity.isNotEmpty()) {
+            if (s.activity.isNotEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -108,7 +109,7 @@ fun PlaygroundScreen(viewModel: PlaygroundViewModel) {
                         .padding(16.dp)
                 ) {
                     Text(
-                        text = activity,
+                        text = s.activity,
                         fontSize = 18.sp,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
@@ -132,6 +133,22 @@ fun PlaygroundScreen(viewModel: PlaygroundViewModel) {
                 }
                 Text("Random Quote")
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            OutlinedButton(
+                onClick = { viewModel.testBinaryBridge() },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isLoading
+            ) {
+                Text("Test 1MB Zero-Copy Bridge")
+            }
+            Text(
+                text = "Check logcat for timing results",
+                fontSize = 10.sp,
+                color = Color.Gray,
+                modifier = Modifier.padding(top = 4.dp)
+            )
         }
     }
 }

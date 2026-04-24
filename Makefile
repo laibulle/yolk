@@ -24,6 +24,16 @@ generate-playground-macos:
 	node packages/codegen/dist/cli.js examples/playground/logic/src/http.spec.ts examples/playground/macos/Generated examples/playground/logic/src/generated
 	cd examples/playground/macos && xcodegen generate
 
+generate-playground-ios:
+	node packages/codegen/dist/cli.js examples/playground/logic/playground.spec.ts examples/playground/ios/Generated examples/playground/logic/src/generated
+	node packages/codegen/dist/cli.js examples/playground/logic/src/http.spec.ts examples/playground/ios/Generated examples/playground/logic/src/generated
+	cd examples/playground/ios && xcodegen generate
+
+generate-playground-android:
+	cd examples/playground/logic && pnpm build
+
+generate-playground: generate-playground-macos generate-playground-ios generate-playground-android
+
 # Clean up build artifacts
 clean:
 	rm -rf .vercel/output

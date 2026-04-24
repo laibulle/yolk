@@ -64,6 +64,30 @@ struct ContentView: View {
                     .disabled(viewModel.isLoading)
                 }
                 .padding(.horizontal)
+
+                Divider()
+
+                VStack(spacing: 10) {
+                    Text("Performance")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+
+                    Button(action: { Task { await viewModel.testBinaryBridge() } }) {
+                        Text("Test 1MB Zero-Copy Bridge")
+                            .font(.system(size: 14, weight: .semibold))
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.zinc800)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                    .disabled(viewModel.isLoading)
+                    
+                    Text("See console for timing and pointer verification")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal)
             }
         }
         .padding()

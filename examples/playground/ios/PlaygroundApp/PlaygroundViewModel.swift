@@ -42,6 +42,42 @@ final class PlaygroundViewModel: ObservableObject {
     func reset()     async { await dispatch("reset") }
     func fetchActivity() async { await dispatch("fetchActivity") }
 
+    func testBinaryBridge() async {
+        guard let runtime else { return }
+        isLoading = true
+        defer { isLoading = false }
+        
+        let size = 1024 * 1024 // 1MB
+        var data = Data(count: size)
+        data.withUnsafeMutableBytes { (ptr: UnsafeMutableRawBufferPointer) in
+            for i in 0..<size {
+                ptr[i] = UInt8(i % 256)
+            }
+            print("[Playground] Native buffer pointer: \(ptr.baseAddress!)")
+        }
+        
+        let start = CFAbsoluteTimeGetCurrent()
+        do {
+            let resultBuffer = try await runtime.call("processBuffer", args: try YolkBin.encode([data]))
+            let end = CFAbsoluteTimeGetCurrent()
+            
+            if let returnedData = try YolkBin.decode(resultBuffer) as? Data {
+                let duration = (end - start) * 1000
+                print("[Playground] Binary bridge roundtrip: \(size) bytes in \(String(format: "%.2f", duration))ms")
+                
+                returnedData.withUnsafeBytes { ptr in
+                    print("[Playground] Returned buffer pointer: \(ptr.baseAddress!)")
+                }
+                
+                // Verify first few bytes
+                let firstByte = returnedData[0]
+                print("[Playground] Verification: input[0]=0, output[0]=\(firstByte) (expected 255)")
+            }
+        } catch {
+            print("[Playground] Binary test failed: \(error)")
+        }
+    }
+
     private func dispatch(_ fn: String, args: [Any?] = []) async {
         guard let runtime, !isLoading else { return }
         isLoading = true

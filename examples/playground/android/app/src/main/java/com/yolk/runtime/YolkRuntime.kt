@@ -2,8 +2,7 @@ package com.yolk.runtime
 
 import app.cash.quickjs.QuickJs
 import kotlinx.coroutines.*
-import org.json.JSONArray
-import org.json.JSONObject
+import java.nio.ByteBuffer
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -20,18 +19,19 @@ class YolkRuntime {
             quickJs = QuickJs.create()
             quickJs.evaluate(BOOTSTRAP_SCRIPT)
             
-            // Install the internal dispatcher
             val internalDispatch = object : InternalDispatch {
-                override fun dispatch(moduleName: String, method: String, argsJson: String): String {
+                override fun dispatch(moduleName: String, method: String, args: ByteArray): String {
                     val promiseId = "p_${System.currentTimeMillis()}_${(0..1000).random()}"
-                    val args = parseYolkValue(argsJson)
-                    val argList = if (args is YolkValue.Array) args.values else emptyList()
                     
                     scope.launch {
                         try {
                             val module = modules[moduleName] ?: throw Exception("Module $moduleName not found")
-                            val result = module.handle(method, argList)
-                            resolvePromise(promiseId, result)
+                            val argsBuffer = ByteBuffer.wrap(args)
+                            val resultBuffer = module.handle(method, argsBuffer)
+                            
+                            val resultBytes = ByteArray(resultBuffer.remaining())
+                            resultBuffer.get(resultBytes)
+                            resolvePromise(promiseId, resultBytes)
                         } catch (e: Exception) {
                             rejectPromise(promiseId, e.message ?: "Unknown error")
                         }
@@ -43,9 +43,11 @@ class YolkRuntime {
         }
     }
 
-    private fun resolvePromise(id: String, value: YolkValue) {
+    private fun resolvePromise(id: String, value: ByteArray) {
         executor.execute {
-            quickJs.evaluate("__yolk.resolve('$id', ${value.toJson()})")
+            // We pass the byte array to JS which sees it as a Uint8Array
+            quickJs.set("__yolk_temp_resolve_val", ByteArray::class.java, value)
+            quickJs.evaluate("__yolk.resolve('$id', __yolk_temp_resolve_val.buffer)")
         }
     }
 
@@ -59,10 +61,9 @@ class YolkRuntime {
         modules[module.name] = module
         executor.execute {
             quickJs.evaluate("""
-                globalThis.__yolk_native_${module.name} = (method, args) => {
-                    var id = __yolk_internal.dispatch("${module.name}", method, JSON.stringify(args));
-                    var p = __yolk.createPromiseWithId(id);
-                    return p;
+                globalThis.__yolk_native_${module.name} = (method, argsBuffer) => {
+                    var id = __yolk_internal.dispatch("${module.name}", method, new Uint8Array(argsBuffer));
+                    return __yolk.createPromiseWithId(id);
                 };
             """.trimIndent())
         }
@@ -72,16 +73,14 @@ class YolkRuntime {
         quickJs.evaluate(script)
     }
 
-    suspend fun call(function: String, vararg args: YolkValue): YolkValue = withContext(jsDispatcher) {
-        val argsJson = args.joinToString(",") { it.toJson() }
-        
+    suspend fun call(function: String, args: ByteBuffer): ByteBuffer = withContext(jsDispatcher) {
         suspendCancellableCoroutine { continuation ->
             val promiseId = "call_${System.currentTimeMillis()}_${(0..1000).random()}"
             
             val callback = object : PromiseCallback {
-                override fun resolve(json: String) {
+                override fun resolve(result: ByteArray) {
                     executor.execute {
-                        continuation.resume(parseYolkValue(json))
+                        continuation.resume(ByteBuffer.wrap(result))
                     }
                 }
                 override fun reject(error: String) {
@@ -93,15 +92,19 @@ class YolkRuntime {
             
             quickJs.set("__yolk_callback_$promiseId", PromiseCallback::class.java, callback)
             
+            val argsBytes = ByteArray(args.remaining())
+            args.get(argsBytes)
+            quickJs.set("__yolk_temp_args", ByteArray::class.java, argsBytes)
+            
             val evalScript = """
                 (function() {
                     try {
-                        var result = $function($argsJson);
+                        var result = __yolk.call("$function", __yolk_temp_args.buffer);
                         if (result instanceof Promise) {
-                            result.then(val => __yolk_callback_$promiseId.resolve(JSON.stringify(val)))
+                            result.then(val => __yolk_callback_$promiseId.resolve(new Uint8Array(val)))
                                   .catch(err => __yolk_callback_$promiseId.reject(err.message || err.toString()));
                         } else {
-                            __yolk_callback_$promiseId.resolve(JSON.stringify(result));
+                            __yolk_callback_$promiseId.resolve(new Uint8Array(result));
                         }
                     } catch (e) {
                         __yolk_callback_$promiseId.reject(e.message || e.toString());
@@ -113,40 +116,6 @@ class YolkRuntime {
         }
     }
 
-    private fun parseYolkValue(json: String): YolkValue {
-        if (json == "null" || json == "undefined") return YolkValue.Null
-        if (json == "true") return YolkValue.Bool(true)
-        if (json == "false") return YolkValue.Bool(false)
-        
-        return try {
-            if (json.startsWith("{")) {
-                val obj = JSONObject(json)
-                val fields = mutableMapOf<String, YolkValue>()
-                obj.keys().forEach { key ->
-                    fields[key] = parseYolkValue(obj.get(key).toString())
-                }
-                YolkValue.Object(fields)
-            } else if (json.startsWith("[")) {
-                val arr = JSONArray(json)
-                val values = mutableListOf<YolkValue>()
-                for (i in 0 until arr.length()) {
-                    values.add(parseYolkValue(arr.get(i).toString()))
-                }
-                YolkValue.Array(values)
-            } else if (json.startsWith("\"")) {
-                YolkValue.String(json.trim('"'))
-            } else if (json.contains(".")) {
-                YolkValue.Double(json.toDouble())
-            } else {
-                YolkValue.Int(json.toInt())
-            }
-        } catch (e: Exception) {
-            if (json.startsWith("\"")) YolkValue.String(json.trim('"'))
-            else if (json == "true" || json == "false") YolkValue.Bool(json.toBoolean())
-            else YolkValue.String(json)
-        }
-    }
-
     fun close() {
         executor.execute {
             quickJs.close()
@@ -155,11 +124,11 @@ class YolkRuntime {
     }
 
     interface InternalDispatch {
-        fun dispatch(moduleName: String, method: String, argsJson: String): String
+        fun dispatch(moduleName: String, method: String, args: ByteArray): String
     }
 
     interface PromiseCallback {
-        fun resolve(json: String)
+        fun resolve(result: ByteArray)
         fun reject(error: String)
     }
 
@@ -181,21 +150,19 @@ class YolkRuntime {
                     reject: function(id, message) {
                         var h = pending[id];
                         if (h) { delete pending[id]; h.reject(new Error(message)); }
+                    },
+                    call: function(fnName, argsBuffer) {
+                        var fn = globalThis[fnName];
+                        if (typeof fn !== "function") throw new Error("JS function '" + fnName + "' not found");
+                        var args = globalThis.YolkBin.decode(argsBuffer);
+                        var result = fn.apply(null, args);
+                        if (result instanceof Promise) {
+                            return result.then(function(val) { return globalThis.YolkBin.encode(val); });
+                        }
+                        return globalThis.YolkBin.encode(result);
                     }
                 };
             })();
         """
-    }
-}
-
-private fun YolkValue.toJson(): String {
-    return when (this) {
-        is YolkValue.Null -> "null"
-        is YolkValue.Bool -> value.toString()
-        is YolkValue.Int -> value.toString()
-        is YolkValue.Double -> value.toString()
-        is YolkValue.String -> "\"$value\""
-        is YolkValue.Array -> "[${values.joinToString(",") { it.toJson() }}]"
-        is YolkValue.Object -> "{${fields.map { "\"${it.key}\":${it.value.toJson()}" }.joinToString(",")}}"
     }
 }

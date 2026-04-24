@@ -1,0 +1,47 @@
+# Web (Mock Bridge)
+
+While Yolk is designed for native platforms, you can run and test your business logic in the browser using a **Mock Bridge**. This is how the Yolk Playground on this site works.
+
+## How it works
+
+In a native environment, the Yolk Runtime injects global functions like `__yolk_native_Storage` into the JavaScript engine. On the web, we can simulate these by registering our own handlers on `globalThis`.
+
+The TypeScript logic remains identical; it simply calls into the mock implementations instead of native code.
+
+## Setup a Mock Bridge
+
+To simulate a native module in the browser, register a function that accepts a method name and a **YolkBin** encoded buffer:
+
+```typescript
+import { YolkBin } from "@yolk/sdk"
+
+type NativeHandler = (method: string, argsBuffer: ArrayBuffer) => Promise<ArrayBuffer>
+
+function registerMockModule(name: string, handler: NativeHandler) {
+  (globalThis as any)[`__yolk_native_${name}`] = handler
+}
+
+// Example: Mocking a "Storage" module
+registerMockModule("Storage", async (method, argsBuffer) => {
+  const args = YolkBin.decode(argsBuffer)
+  
+  if (method === "getItem") {
+    const key = args[0]
+    const value = localStorage.getItem(key)
+    return YolkBin.encode(value)
+  }
+  
+  return YolkBin.encode(null)
+})
+```
+
+## Binary Parity
+
+The Mock Bridge uses the exact same **YolkBin** binary protocol as the iOS, macOS, and Android runtimes. This ensures that:
+1.  **Serialization behavior** is identical between web and native.
+2.  **Zero-copy data** (like `ArrayBuffer`) is handled correctly.
+3.  **Type safety** is maintained via the generated proxies.
+
+## Testing logic
+
+Using the Mock Bridge is the fastest way to develop your app's core logic. You can use standard web development tools, unit tests (Vitest/Jest), and rapid hot-reloading without needing an emulator or a physical device.

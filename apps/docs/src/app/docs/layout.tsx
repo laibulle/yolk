@@ -24,8 +24,9 @@ const nav = [
     group: "Platforms",
     links: [
       { href: "/docs/platforms/macos", label: "macOS" },
-      { href: "/docs/platforms/ios", label: "iOS (coming soon)" },
-      { href: "/docs/platforms/android", label: "Android (coming soon)" },
+      { href: "/docs/platforms/ios", label: "iOS" },
+      { href: "/docs/platforms/android", label: "Android" },
+      { href: "/docs/platforms/web", label: "Web (Mock Bridge)" },
     ],
   },
   {
@@ -33,7 +34,7 @@ const nav = [
     links: [
       { href: "/docs/api/runtime", label: "YolkRuntime" },
       { href: "/docs/api/module", label: "YolkModule" },
-      { href: "/docs/api/value", label: "YolkValue" },
+      { href: "/docs/api/bin", label: "YolkBin" },
       { href: "/docs/api/codegen-cli", label: "yolk-codegen CLI" },
     ],
   },

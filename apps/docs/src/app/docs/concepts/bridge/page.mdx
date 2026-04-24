@@ -1,34 +1,37 @@
 # The bridge
 
-The bridge is the layer between the JavaScript runtime and native code. Yolk's bridge is a **buffer-only**, high-performance interface designed for zero-copy data transfer and end-to-end type safety.
+The bridge is the layer between the JavaScript runtime and native code. Yolk's bridge is a **true zero-copy**, high-performance interface designed for shared memory access and end-to-end type safety.
 
-## Zero-Copy Architecture
+## True Zero-Copy Architecture
 
-Unlike traditional bridges that rely on JSON serialization, Yolk uses raw memory buffers (**ArrayBuffer** in JS, **Data** in Swift) for all communication. 
+Unlike traditional bridges that copy data at the boundary, Yolk shares the same raw memory between Swift and JavaScript.
 
-### Why buffers?
-1.  **Performance**: Eliminates the `JSON.stringify` and `JSON.parse` overhead, which is the primary bottleneck in cross-platform frameworks.
-2.  **Memory**: Allows direct, shared memory access for large datasets (images, audio, video frames).
-3.  **Predictability**: Byte-level control over data layout ensures consistent behavior across different JS engines (JSC vs. QuickJS).
+### How it works
+1.  **JS to Swift**: When JS passes an `ArrayBuffer`, Yolk extracts its C-pointer and wraps it in a Swift `Data` object using `Data(bytesNoCopy:...)`. We manage memory lifetime by capturing the `JSValue` in the `Data` deallocator, preventing garbage collection until Swift releases the buffer.
+2.  **Swift to JS**: When Swift passes `Data` to JS, we bridge it to `NSData` and pass its raw bytes to `JSObjectMakeArrayBufferWithBytesNoCopy`. JS sees this as a standard `ArrayBuffer` pointing directly to Swift's memory.
+
+### Why this matters
+-   **Zero Serialization**: Eliminates `JSON.stringify` and `JSON.parse` entirely.
+-   **Shared Memory**: Perfect for high-bandwidth tasks like image processing, audio streaming, or real-time physics logic.
+-   **Safe Value Semantics**: Swift `Data` uses Copy-on-Write (CoW). If Swift tries to mutate JS-owned memory, it automatically creates a local copy, ensuring thread safety and preventing memory corruption on the JS heap.
 
 ## How a call works
 
-When TypeScript calls a native module method, the arguments are packed into a binary buffer using the **YolkBin** protocol:
+Arguments are packed into a binary buffer using the **YolkBin** protocol and passed via shared memory:
 
 ```
 TypeScript                    Bridge                     Swift
 ──────────                    ──────                     ─────
 playground.increment(1)
   │
-  ├─▶ YolkBin.encode([1]) ──▶ ArrayBuffer
-  │
+  ├─▶ YolkBin.encode([1]) ──▶ ArrayBuffer (Shared Ptr)
+  │                               │
   └─▶ __yolk_native_Playground("increment", buffer)
-           │
-           ├─▶ Create JS Promise (id=42)
-           ├─▶ Return promise to caller  ──▶ TypeScript awaits
-           │
-           └─▶ Task {
-                 // args is raw Data
+           │                      │
+           ├─▶ Create JS Promise  │
+           │                      │
+           └─▶ Task {             ▼
+                 // args is raw Data pointing to JS memory
                  await module.handle("increment", args)
                      │
                      ├─▶ YolkBin.decode(args) ──▶ [1.0]
@@ -38,10 +41,10 @@ playground.increment(1)
                                └─▶ increment(step: 1.0) ──▶ PlaygroundState(...)
                  }
                      │
-                     ├─▶ YolkBin.encode(state) ──▶ Data
-                     │
-                     └─▶ jsQueue.async {
-                               // result is JS ArrayBuffer
+                     ├─▶ YolkBin.encode(state) ──▶ Data (Shared Ptr)
+                     │                               │
+                     └─▶ jsQueue.async {             ▼
+                               // result is ArrayBuffer pointing to Swift memory
                                __yolk.resolve(42, result)
                                drainMicrotasks()       ──▶ Promise resolves
                          }
@@ -49,24 +52,20 @@ playground.increment(1)
 
 ## The YolkBin Protocol
 
-Yolk implements a custom **Type-Length-Value (TLV)** protocol for binary serialization. It handles the following types natively at the byte level:
+Yolk implements a custom **Type-Length-Value (TLV)** protocol for binary serialization. It handles primitives, objects, and zero-copy raw buffers:
 
-- **0x00**: Null / Undefined
-- **0x01**: Boolean (1 byte)
-- **0x03**: Number (Float64, 8 bytes)
-- **0x04**: String (UTF-8 encoded)
-- **0x05**: Array
-- **0x06**: Object (Key-Value pairs)
-- **0x07**: Raw Buffer (Zero-copy pass-through)
+- **0x03 (Number)**: Native Float64 (8 bytes).
+- **0x04 (String)**: UTF-8 bytes with a length prefix.
+- **0x07 (Buffer)**: Direct pointer sharing for `ArrayBuffer` and `Data`.
 
 ## Single Source of Truth (SSOT)
 
 Yolk follows a reactive state model. The application state lives in JavaScript. Whenever the state mutates, the JS logic pushes the new state as a binary buffer to a native **Observer**:
 
 ```typescript
-// JS notifies native of state change
+// JS notifies native of state change via zero-copy buffer
 const buffer = YolkBin.encode([state]);
 globalThis.__yolk_native_Observer("onStateChanged", buffer);
 ```
 
-On the native side, the generated **PlaygroundState** struct is automatically updated, triggering a reactive UI refresh in SwiftUI or Jetpack Compose.
+On the native side, the generated **PlaygroundState** struct is automatically updated, triggering a reactive UI refresh.
