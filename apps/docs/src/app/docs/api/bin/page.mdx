@@ -1,0 +1,51 @@
+# YolkBin API
+
+`YolkBin` is the custom binary protocol used for all data transfer in Yolk. It is a high-performance **Type-Length-Value (TLV)** protocol that handles primitives, objects, and zero-copy raw buffers.
+
+## TypeScript API
+
+```typescript
+import { YolkBin } from "@yolk/sdk"
+
+// Encode an object or array into a zero-copy ArrayBuffer
+const buffer = YolkBin.encode({ hello: "world" });
+
+// Decode an ArrayBuffer back into a JavaScript object
+const obj = YolkBin.decode(buffer);
+```
+
+## Swift API
+
+```swift
+import Yolk
+
+// Encode a Swift value (String, Double, Bool, or Codable) into Data
+let data = try YolkBin.encode(["count": 42.0])
+
+// Decode Data back into a Swift type
+let dict = try YolkBin.decode(data) as? [String: Any]
+
+// Decode Data directly into a Codable struct
+let state = try YolkBin.decode(data, as: PlaygroundState.self)
+```
+
+## Binary Tags
+
+The following tags are used in the binary stream to identify types:
+
+| Tag | Type | Payload Size |
+| :--- | :--- | :--- |
+| `0x00` | Null / Void | 0 bytes |
+| `0x01` | Boolean | 1 byte (0/1) |
+| `0x03` | Number | 8 bytes (Float64 LE) |
+| `0x04` | String | 4 bytes (Length) + N bytes (UTF-8) |
+| `0x05` | Array | 4 bytes (Count) + N items |
+| `0x06` | Object | 4 bytes (Count) + N Key-Value pairs |
+| `0x07` | Buffer | 4 bytes (Length) + N bytes (Raw) |
+
+## Performance
+
+By using `YolkBin` instead of JSON:
+1.  **Parsing is O(N)**: Single-pass decoding with no string scanning.
+2.  **No String Escaping**: Strings are written as raw UTF-8 bytes.
+3.  **Zero-Copy Support**: Raw `ArrayBuffer` data (Tag `0x07`) is passed directly via shared memory pointers, making it ideal for high-bandwidth tasks like image or frame processing.

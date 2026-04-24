@@ -1,58 +1,61 @@
 # Spec files
 
-A spec file is the single source of truth for a native module. It is a plain TypeScript file whose interfaces drive codegen for both sides of the bridge.
+Spec files define the contract between your TypeScript logic and the native platforms. They are the single source of truth for the **Yolk Codegen** tool.
 
-## Rules
+## Structure
 
-1. **Filename** — any `.spec.ts` file is a valid input to `yolk-codegen`.
-2. **Interface name** — must end with `Spec`. The module name is derived by stripping the suffix: `CounterSpec` → module named `Counter`.
-3. **Return types** — every method must return `Promise<T>`. Synchronous methods are not supported across the bridge.
-4. **Supported types** — `string`, `number`, `boolean`, `void`, `null`, arrays, and plain objects. Generics and union types beyond `T | null` are not yet supported.
-
-## Example
+A spec file is a standard TypeScript file containing one or more interface exports. By convention, interface names ending in `Spec` define **Native Modules**, and interfaces ending in `State` define the **Application State**.
 
 ```typescript
-export interface StorageSpec {
-  get(key: string): Promise<string | null>
-  set(key: string, value: string): Promise<void>
-  delete(key: string): Promise<void>
+// playground.spec.ts
+
+/**
+ * Defines the reactive state pushed from JS to Native.
+ * Codegen will create a Swift Codable struct and Kotlin Data class.
+ */
+export interface PlaygroundState {
+  count: number
+  canIncrement: boolean
+  canDecrement: boolean
+  activity: string
+}
+
+/**
+ * Defines the methods exposed by the native module.
+ */
+export interface PlaygroundSpec {
+  increment(step: number): Promise<PlaygroundState>
+  decrement(step: number): Promise<PlaygroundState>
+  reset(): Promise<PlaygroundState>
+  
+  /**
+   * Demonstrate zero-copy binary transfer.
+   * Maps to Data in Swift and ArrayBuffer in TS.
+   */
+  processBuffer(buffer: ArrayBuffer): Promise<ArrayBuffer>
+  
+  /**
+   * Standard subscription pattern for SSOT state.
+   */
+  subscribe(): Promise<void>
 }
 ```
 
-## What codegen produces
+## Type Mapping
 
-From the spec above, `yolk-codegen` generates:
+Yolk's binary bridge supports a specific set of TypeScript types, which are automatically mapped to their high-performance native equivalents:
 
-**Swift** — a protocol with a dispatch table:
+| TypeScript | Swift | Kotlin | YolkBin Tag |
+| :--- | :--- | :--- | :--- |
+| `string` | `String` | `String` | `0x04` |
+| `number` | `Double` | `Double` | `0x03` |
+| `boolean` | `Bool` | `Boolean` | `0x01` |
+| `ArrayBuffer` | `Data` | `ByteBuffer` | `0x07` |
+| `interface T` | `Codable struct` | `Data Class` | `0x06` |
+| `void` | `Void` | `Unit` | `0x00` |
 
-```swift
-public protocol StorageModule: YolkModule {
-    func get(key: String) async throws -> String?
-    func set(key: String, value: String) async throws -> Void
-    func delete(key: String) async throws -> Void
-}
-```
+## Why use spec files?
 
-**TypeScript** — a proxy class:
+Spec files allow Yolk to enforce **End-to-End Type Safety**. Because the native code is generated from the same file as the JS proxy, it is impossible to call a method with the wrong arguments or expect a return type that doesn't exist. 
 
-```typescript
-export class Storage extends NativeModule {
-  get(key: string): Promise<string | null> { ... }
-  set(key: string, value: string): Promise<void> { ... }
-  delete(key: string): Promise<void> { ... }
-}
-```
-
-## One spec, all platforms
-
-The spec file lives in your shared `logic/` directory. Codegen targets differ per platform:
-
-```sh
-# macOS
-yolk-codegen storage.spec.ts ./macos/Generated ./logic/src/generated
-
-# iOS (future)
-yolk-codegen storage.spec.ts ./ios/Generated ./logic/src/generated
-```
-
-The TypeScript output is the same for all platforms. Only the Swift (or Kotlin, or C) output changes.
+If you change a field name in `PlaygroundState`, your Swift and Kotlin code will fail to compile until you update your UI bindings, preventing runtime crashes.

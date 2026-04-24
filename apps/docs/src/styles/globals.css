@@ -1,2 +1,52 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+
+@theme {
+  --color-zinc-950: #09090b;
+}
+
+@layer base {
+  pre {
+    @apply rounded-xl border border-zinc-800 bg-zinc-950! p-0;
+  }
+
+  code {
+    @apply font-mono text-[13px] leading-relaxed;
+  }
+
+  /* rehype-pretty-code styles */
+  [data-rehype-pretty-code-figure] {
+    @apply my-6;
+  }
+
+  [data-rehype-pretty-code-figure] pre {
+    @apply overflow-x-auto py-4;
+  }
+
+  [data-rehype-pretty-code-figure] code {
+    @apply grid min-w-full break-words bg-transparent! p-0;
+    counter-reset: line;
+  }
+
+  [data-rehype-pretty-code-figure] [data-line] {
+    @apply px-4 border-l-2 border-transparent;
+  }
+
+  [data-rehype-pretty-code-figure] [data-highlighted-line] {
+    @apply bg-zinc-800/50 border-l-blue-500;
+  }
+
+  [data-rehype-pretty-code-figure] [data-line]::before {
+    counter-increment: line;
+    content: counter(line);
+    @apply mr-4 inline-block w-4 text-right text-zinc-600;
+  }
+
+  [data-rehype-pretty-code-title] {
+    @apply px-4 py-2 text-xs font-medium text-zinc-400 border-x border-t border-zinc-800 rounded-t-xl bg-zinc-900;
+  }
+
+  [data-rehype-pretty-code-title] + pre {
+    @apply rounded-t-none;
+  }
+}

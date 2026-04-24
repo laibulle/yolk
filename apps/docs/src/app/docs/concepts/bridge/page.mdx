@@ -1,74 +1,72 @@
 # The bridge
 
-The bridge is the layer between the JavaScript runtime and native code. Yolk's bridge is designed around three principles: **value ownership**, **explicit dispatch**, and **no shared mutable state**.
+The bridge is the layer between the JavaScript runtime and native code. Yolk's bridge is a **buffer-only**, high-performance interface designed for zero-copy data transfer and end-to-end type safety.
+
+## Zero-Copy Architecture
+
+Unlike traditional bridges that rely on JSON serialization, Yolk uses raw memory buffers (**ArrayBuffer** in JS, **Data** in Swift) for all communication. 
+
+### Why buffers?
+1.  **Performance**: Eliminates the `JSON.stringify` and `JSON.parse` overhead, which is the primary bottleneck in cross-platform frameworks.
+2.  **Memory**: Allows direct, shared memory access for large datasets (images, audio, video frames).
+3.  **Predictability**: Byte-level control over data layout ensures consistent behavior across different JS engines (JSC vs. QuickJS).
 
 ## How a call works
 
-When TypeScript calls a native module method, this is what happens:
+When TypeScript calls a native module method, the arguments are packed into a binary buffer using the **YolkBin** protocol:
 
 ```
 TypeScript                    Bridge                     Swift
 ──────────                    ──────                     ─────
-counter.increment(1)
+playground.increment(1)
   │
-  └─▶ __yolk_native_Counter("increment", [1])
+  ├─▶ YolkBin.encode([1]) ──▶ ArrayBuffer
+  │
+  └─▶ __yolk_native_Playground("increment", buffer)
            │
            ├─▶ Create JS Promise (id=42)
            ├─▶ Return promise to caller  ──▶ TypeScript awaits
            │
            └─▶ Task {
-                 await module.handle("increment", [.double(1)])
+                 // args is raw Data
+                 await module.handle("increment", args)
                      │
-                     └─▶ actor CounterModule
+                     ├─▶ YolkBin.decode(args) ──▶ [1.0]
+                     │
+                     └─▶ actor PlaygroundModule
                                │
-                               └─▶ increment(by: 1.0) ──▶ 6.0
+                               └─▶ increment(step: 1.0) ──▶ PlaygroundState(...)
                  }
                      │
+                     ├─▶ YolkBin.encode(state) ──▶ Data
+                     │
                      └─▶ jsQueue.async {
-                               __yolk.resolve(42, 6.0)
+                               // result is JS ArrayBuffer
+                               __yolk.resolve(42, result)
                                drainMicrotasks()       ──▶ Promise resolves
                          }
 ```
 
-The key points:
-- The Promise is created and returned **synchronously** on the JS thread
-- The Swift work happens **asynchronously** on the actor's executor
-- Resolution is dispatched **back onto the JS thread**, then microtasks are drained explicitly
+## The YolkBin Protocol
 
-## Value types
+Yolk implements a custom **Type-Length-Value (TLV)** protocol for binary serialization. It handles the following types natively at the byte level:
 
-Every value that crosses the bridge is a `YolkValue` — a value-type enum:
+- **0x00**: Null / Undefined
+- **0x01**: Boolean (1 byte)
+- **0x03**: Number (Float64, 8 bytes)
+- **0x04**: String (UTF-8 encoded)
+- **0x05**: Array
+- **0x06**: Object (Key-Value pairs)
+- **0x07**: Raw Buffer (Zero-copy pass-through)
 
-```swift
-public indirect enum YolkValue: Sendable {
-    case null
-    case bool(Bool)
-    case int(Int)
-    case double(Double)
-    case string(String)
-    case array([YolkValue])
-    case object([String: YolkValue])
-}
-```
+## Single Source of Truth (SSOT)
 
-`YolkValue` is `Sendable` and has no identity — it is always copied, never shared. This eliminates the class of memory bugs React Native encountered with shared object references across the bridge.
-
-## Microtask draining
-
-JavaScriptCore does not have a built-in event loop. When the JS call stack is empty, Promises do not automatically settle — the microtask queue must be drained manually.
-
-Yolk does this by calling `context.evaluateScript("")` after every bridge resolution. This is an internal implementation detail; it is not something you need to think about as a consumer.
-
-## Error propagation
-
-If a Swift method throws, the error is caught by the bridge and used to reject the Promise:
+Yolk follows a reactive state model. The application state lives in JavaScript. Whenever the state mutates, the JS logic pushes the new state as a binary buffer to a native **Observer**:
 
 ```typescript
-try {
-  await counter.increment(1)
-} catch (e) {
-  console.error(e.message) // Swift error message
-}
+// JS notifies native of state change
+const buffer = YolkBin.encode([state]);
+globalThis.__yolk_native_Observer("onStateChanged", buffer);
 ```
 
-On the Swift side, all thrown errors propagate through `YolkError.methodFailed`.
+On the native side, the generated **PlaygroundState** struct is automatically updated, triggering a reactive UI refresh in SwiftUI or Jetpack Compose.

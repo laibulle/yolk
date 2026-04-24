@@ -5,25 +5,39 @@ import { Wordmark } from "@/components/Logo";
 const GITHUB = "https://github.com/laibulle/yolk";
 
 const specExample = `// playground.spec.ts
+export interface PlaygroundState {
+  count: number
+  activity: string
+}
+
 export interface PlaygroundSpec {
-  increment(by: number): Promise<number>
-  decrement(by: number): Promise<number>
-  value(): Promise<number>
+  increment(step: number): Promise<PlaygroundState>
+  processBuffer(buffer: ArrayBuffer): Promise<ArrayBuffer>
 }`;
 
-const tsExample = `import { Playground } from "./generated/Playground"
+const tsExample = `// index.ts (Business Logic)
+async function increment(step: number): Promise<State> {
+  count += step
+  return state() // SSOT: JS pushes new state to Native
+}
 
-const playground = new Playground()
-
-export async function add(n: number) {
-  return playground.increment(n)
+async function processBuffer(buffer: ArrayBuffer) {
+  const view = new Uint8Array(buffer)
+  // Zero-copy byte manipulation
+  view[0] = 255 - view[0]
+  return buffer
 }`;
 
-const swiftExample = `actor AppPlaygroundModule: PlaygroundModule {
-  private var count = 0.0
+const swiftExample = `// Swift Implementation
+actor AppPlaygroundModule: PlaygroundModule {
+  // Logic is in TS, UI is reactive to State struct
+  func increment(step: Double) async throws -> PlaygroundState {
+    // ... bridge handles the rest
+  }
 
-  func increment(by: Double) async throws -> Double {
-    count += by; return count
+  func processBuffer(buffer: Data) async throws -> Data {
+    // Shared memory pointer access
+    return buffer
   }
 }`;
 
@@ -92,18 +106,17 @@ function Hero() {
         <HeroLogo />
       </div>
       <div className="inline-flex items-center gap-2 text-xs font-medium text-amber-400/70 bg-amber-400/8 border border-amber-400/15 rounded-full px-3 py-1 mb-7">
-        macOS · iOS · Android · Linux · Windows
+        Zero-Copy · Buffer-Only · High Performance
       </div>
-      <h1 className="text-5xl font-bold tracking-tight mb-6 text-white">
-        TypeScript logic.{" "}
+      <h1 className="text-5xl font-bold tracking-tight mb-6 text-white leading-tight">
+        High-performance logic.{" "}
         <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-orange-400">
-          Native UI everywhere.
+          Shared at the byte level.
         </span>
       </h1>
       <p className="text-xl text-zinc-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-        Write your app&apos;s business logic once in TypeScript. Run it inside
-        any native platform. No web views. No compromises. The native UI stays
-        fully native.
+        Write your app&apos;s logic once in TypeScript. Run it natively with zero-copy
+        binary buffers. No JSON overhead. No compromises.
       </p>
       <div className="flex items-center justify-center gap-4">
         <Link
@@ -201,23 +214,23 @@ function HeroLogo() {
 function HowItWorks() {
   const steps = [
     {
-      label: "1. Write a spec",
+      label: "1. Define your Spec & State",
       description:
-        "Declare a TypeScript interface. Every method returns a Promise.",
+        "Declare interfaces for your logic and state. Codegen creates native models automatically.",
       code: specExample,
       language: "typescript",
     },
     {
-      label: "2. Use it in TypeScript",
+      label: "2. Write Binary Logic",
       description:
-        "Codegen produces a typed proxy class. Import it and write pure business logic.",
+        "Logic runs in JS. Move data via YolkBin or raw ArrayBuffers with zero intermediate copies.",
       code: tsExample,
       language: "typescript",
     },
     {
-      label: "3. Implement natively",
+      label: "3. Reactive Native UI",
       description:
-        "Codegen also produces a Swift protocol. Implement it with an actor.",
+        "Native ViewModels are reactive to the JS heap. UI updates automatically when state mutates.",
       code: swiftExample,
       language: "swift",
     },
@@ -226,9 +239,9 @@ function HowItWorks() {
   return (
     <section className="border-t border-zinc-800 py-24">
       <div className="max-w-4xl mx-auto px-6">
-        <h2 className="text-3xl font-bold tracking-tight mb-4">How it works</h2>
+        <h2 className="text-3xl font-bold tracking-tight mb-4 text-white">How it works</h2>
         <p className="text-zinc-400 mb-16 text-lg">
-          One spec file. Codegen handles the rest.
+          One source of truth. Binary performance.
         </p>
         <div className="space-y-16">
           {steps.map((step) => (
@@ -256,46 +269,45 @@ function HowItWorks() {
 function Features() {
   const items = [
     {
-      title: "Type-safe bridge",
+      title: "Buffer-Only Bridge",
       description:
-        "A single .spec.ts interface generates both the Swift protocol and the TypeScript proxy. Type mismatches are caught at compile time.",
+        "JSON is eliminated. All data crosses the bridge as raw binary buffers using the high-performance YolkBin protocol.",
     },
     {
-      title: "No JSON overhead",
+      title: "Zero-Copy Memory",
       description:
-        "Values cross the bridge as structured enums, not serialized strings. The runtime dispatches directly into Swift actors.",
+        "Direct shared-memory access between JS and Native. Perfect for media-heavy or real-time data processing.",
     },
     {
-      title: "Explicit threading",
+      title: "Reactive SSOT",
       description:
-        "JS runs on a dedicated thread. Swift modules run on their own actor executor. The main thread is yours.",
+        "JavaScript owns the application state. Native is a reactive view, receiving binary updates via a subscription model.",
     },
     {
-      title: "Functional by design",
+      title: "End-to-End Typing",
       description:
-        "Business logic is pure TypeScript. Side effects flow through the bridge. Platform capabilities are explicit dependencies.",
+        "Unified codegen for logic proxies, native protocols, and state models. Mismatches are caught at compile time.",
     },
     {
-      title: "One logic, many platforms",
+      title: "Polyglot Runtime",
       description:
-        "The TypeScript bundle is platform-agnostic. Swap the Swift implementation for Kotlin or a C binding without touching your logic.",
+        "Production-ready support for JavaScriptCore (Apple) and QuickJS (Android), with a unified binary interface.",
     },
     {
-      title: "Promise-native",
+      title: "Async-First",
       description:
-        "The bridge maps Swift async/await to TypeScript Promises. No custom async model to learn — just use what JS already does well.",
+        "Naturally bridges Swift async/await and Kotlin coroutines to standard TypeScript Promises.",
     },
   ];
 
   return (
     <section className="border-t border-zinc-800 py-24">
       <div className="max-w-4xl mx-auto px-6">
-        <h2 className="text-3xl font-bold tracking-tight mb-4">
-          Built with intent
+        <h2 className="text-3xl font-bold tracking-tight mb-4 text-white">
+          Architected for Performance
         </h2>
         <p className="text-zinc-400 mb-16 text-lg">
-          Lessons from React Native&apos;s new architecture, applied from the
-          start.
+          Bridging the gap between the flexibility of JS and the power of Native.
         </p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
           {items.map((item) => (
@@ -361,7 +373,7 @@ function Testimonials() {
   return (
     <section className="border-t border-zinc-800 py-24">
       <div className="max-w-4xl mx-auto px-6">
-        <h2 className="text-3xl font-bold tracking-tight mb-4">
+        <h2 className="text-3xl font-bold tracking-tight mb-4 text-white">
           Trusted by industry leaders
         </h2>
         <p className="text-zinc-400 mb-16 text-lg">
