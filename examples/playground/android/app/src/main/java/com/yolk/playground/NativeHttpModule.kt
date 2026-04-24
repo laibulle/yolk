@@ -23,6 +23,14 @@ class NativeHttpModule : YolkModule {
     }
 
     private suspend fun fetchGet(urlString: String): String = withContext(Dispatchers.IO) {
-        URL(urlString).openStream().bufferedReader().use { it.readText() }
+        android.util.Log.d("YolkHttp", "Fetching: $urlString")
+        try {
+            val result = URL(urlString).openStream().bufferedReader().use { it.readText() }
+            android.util.Log.d("YolkHttp", "Success: ${result.take(50)}...")
+            result
+        } catch (e: Exception) {
+            android.util.Log.e("YolkHttp", "Failed: $urlString", e)
+            throw e
+        }
     }
 }

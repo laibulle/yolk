@@ -8,6 +8,8 @@ import com.yolk.runtime.YolkRuntime
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.InputStreamReader
 import java.nio.ByteBuffer
@@ -39,6 +41,7 @@ class PlaygroundViewModel(application: Application) : AndroidViewModel(applicati
             val canDecrement = map["canDecrement"] as? Boolean ?: false
             val activity = map["activity"] as? String ?: ""
             _state.value = PlaygroundState(count, canIncrement, canDecrement, activity)
+            _isLoading.value = false
         })
         setup()
     }
@@ -49,12 +52,18 @@ class PlaygroundViewModel(application: Application) : AndroidViewModel(applicati
                 val inputStream = getApplication<Application>().resources.openRawResource(R.raw.logic)
                 val script = InputStreamReader(inputStream).readText()
                 runtime.load(script)
-                
-                // Subscribe to state changes
-                runtime.call("subscribe", YolkBin.encode(emptyList<Any?>()))
-                
+
+                // Trigger the initial state push. subscribe() is async but has no
+                // awaits — its side effect (notifyNative) fires synchronously, so a
+                // direct evaluate() is enough. Using call() would block on a Promise
+                // chain that QuickJS may never pump automatically.
+                runtime.evaluate("void subscribe()")
+
+                // Wait for the Observer to deliver the first state snapshot.
+                _state.filterNotNull().first()
                 _isReady.value = true
             } catch (e: Exception) {
+                android.util.Log.e("Playground", "Setup failed", e)
                 e.printStackTrace()
             }
         }
@@ -63,7 +72,20 @@ class PlaygroundViewModel(application: Application) : AndroidViewModel(applicati
     fun increment() = dispatch("increment", listOf(1.0))
     fun decrement() = dispatch("decrement", listOf(1.0))
     fun reset() = dispatch("reset")
-    fun fetchActivity() = dispatch("fetchActivity")
+    
+    fun fetchActivity() {
+        if (_isLoading.value) return
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                runtime.fireAndForget("fetchActivity", YolkBin.encode(emptyList<Any>()))
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _isLoading.value = false
+            }
+            // Note: _isLoading will be cleared when the observer receives the new state
+        }
+    }
 
     fun testBinaryBridge() {
         viewModelScope.launch {
@@ -96,15 +118,11 @@ class PlaygroundViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private fun dispatch(function: String, args: List<Any?> = emptyList()) {
-        if (_isLoading.value) return
         viewModelScope.launch {
-            _isLoading.value = true
             try {
-                runtime.call(function, YolkBin.encode(args))
+                runtime.fireAndForget(function, YolkBin.encode(args))
             } catch (e: Exception) {
                 e.printStackTrace()
-            } finally {
-                _isLoading.value = false
             }
         }
     }

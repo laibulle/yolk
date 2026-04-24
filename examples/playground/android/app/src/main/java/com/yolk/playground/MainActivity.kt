@@ -98,7 +98,7 @@ fun CounterScreen(viewModel: PlaygroundViewModel) {
             }
 
             Spacer(modifier = Modifier.height(32.dp))
-            HorizontalDivider()
+            Divider()
             Spacer(modifier = Modifier.height(32.dp))
 
             if (s.activity.isNotEmpty()) {

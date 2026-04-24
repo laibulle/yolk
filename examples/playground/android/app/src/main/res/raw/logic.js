@@ -79,106 +79,106 @@
       }
       return 1;
     }
-    static write(value, view, u8, state2) {
+    static write(value, view, u8, state) {
       if (value === null || value === void 0) {
-        view.setUint8(state2.offset++, 0);
+        view.setUint8(state.offset++, 0);
         return;
       }
       if (typeof value === "boolean") {
-        view.setUint8(state2.offset++, 1);
-        view.setUint8(state2.offset++, value ? 1 : 0);
+        view.setUint8(state.offset++, 1);
+        view.setUint8(state.offset++, value ? 1 : 0);
         return;
       }
       if (typeof value === "number") {
-        view.setUint8(state2.offset++, 3);
-        view.setFloat64(state2.offset, value, true);
-        state2.offset += 8;
+        view.setUint8(state.offset++, 3);
+        view.setFloat64(state.offset, value, true);
+        state.offset += 8;
         return;
       }
       if (typeof value === "string") {
-        view.setUint8(state2.offset++, 4);
+        view.setUint8(state.offset++, 4);
         const encoded = this.encoder.encode(value);
-        view.setUint32(state2.offset, encoded.length, true);
-        state2.offset += 4;
-        u8.set(encoded, state2.offset);
-        state2.offset += encoded.length;
+        view.setUint32(state.offset, encoded.length, true);
+        state.offset += 4;
+        u8.set(encoded, state.offset);
+        state.offset += encoded.length;
         return;
       }
       if (value instanceof ArrayBuffer) {
-        view.setUint8(state2.offset++, 7);
-        view.setUint32(state2.offset, value.byteLength, true);
-        state2.offset += 4;
-        u8.set(new Uint8Array(value), state2.offset);
-        state2.offset += value.byteLength;
+        view.setUint8(state.offset++, 7);
+        view.setUint32(state.offset, value.byteLength, true);
+        state.offset += 4;
+        u8.set(new Uint8Array(value), state.offset);
+        state.offset += value.byteLength;
         return;
       }
       if (Array.isArray(value)) {
-        view.setUint8(state2.offset++, 5);
-        view.setUint32(state2.offset, value.length, true);
-        state2.offset += 4;
+        view.setUint8(state.offset++, 5);
+        view.setUint32(state.offset, value.length, true);
+        state.offset += 4;
         for (const item of value)
-          this.write(item, view, u8, state2);
+          this.write(item, view, u8, state);
         return;
       }
       if (typeof value === "object") {
-        view.setUint8(state2.offset++, 6);
+        view.setUint8(state.offset++, 6);
         const keys = Object.keys(value);
-        view.setUint32(state2.offset, keys.length, true);
-        state2.offset += 4;
+        view.setUint32(state.offset, keys.length, true);
+        state.offset += 4;
         for (const key of keys) {
-          this.write(key, view, u8, state2);
-          this.write(value[key], view, u8, state2);
+          this.write(key, view, u8, state);
+          this.write(value[key], view, u8, state);
         }
         return;
       }
     }
-    static read(view, u8, state2) {
-      const type = view.getUint8(state2.offset++);
+    static read(view, u8, state) {
+      const type = view.getUint8(state.offset++);
       switch (type) {
         case 0:
           return null;
         case 1:
-          return view.getUint8(state2.offset++) === 1;
+          return view.getUint8(state.offset++) === 1;
         case 3: {
-          const val = view.getFloat64(state2.offset, true);
-          state2.offset += 8;
+          const val = view.getFloat64(state.offset, true);
+          state.offset += 8;
           return val;
         }
         case 4: {
-          const len = view.getUint32(state2.offset, true);
-          state2.offset += 4;
-          const str = this.decoder.decode(u8.subarray(state2.offset, state2.offset + len));
-          state2.offset += len;
+          const len = view.getUint32(state.offset, true);
+          state.offset += 4;
+          const str = this.decoder.decode(u8.subarray(state.offset, state.offset + len));
+          state.offset += len;
           return str;
         }
         case 7: {
-          const len = view.getUint32(state2.offset, true);
-          state2.offset += 4;
-          const buf = u8.slice(state2.offset, state2.offset + len).buffer;
-          state2.offset += len;
+          const len = view.getUint32(state.offset, true);
+          state.offset += 4;
+          const buf = u8.slice(state.offset, state.offset + len).buffer;
+          state.offset += len;
           return buf;
         }
         case 5: {
-          const count2 = view.getUint32(state2.offset, true);
-          state2.offset += 4;
+          const count = view.getUint32(state.offset, true);
+          state.offset += 4;
           const arr = [];
-          for (let i = 0; i < count2; i++)
-            arr.push(this.read(view, u8, state2));
+          for (let i = 0; i < count; i++)
+            arr.push(this.read(view, u8, state));
           return arr;
         }
         case 6: {
-          const count2 = view.getUint32(state2.offset, true);
-          state2.offset += 4;
+          const count = view.getUint32(state.offset, true);
+          state.offset += 4;
           const obj = {};
-          for (let i = 0; i < count2; i++) {
-            const key = this.read(view, u8, state2);
-            const val = this.read(view, u8, state2);
+          for (let i = 0; i < count; i++) {
+            const key = this.read(view, u8, state);
+            const val = this.read(view, u8, state);
             obj[key] = val;
           }
           return obj;
         }
         default:
-          throw new Error("YolkBin: Unknown type " + type + " at offset " + (state2.offset - 1));
+          throw new Error("YolkBin: Unknown type " + type + " at offset " + (state.offset - 1));
       }
     }
   };
@@ -219,6 +219,50 @@
     }
   };
 
+  // ../../../packages/store/src/index.ts
+  function notifyNative(state, diff = {}) {
+    try {
+      const buffer = YolkBin.encode([state, diff]);
+      globalThis.__yolk_native_Observer?.("onStateChanged", buffer);
+    } catch (e) {
+      console.error("[Yolk] Failed to notify native:", e);
+    }
+  }
+  function shallowDiff(prev, next) {
+    const diff = {};
+    for (const k in next) {
+      const key = k;
+      if (prev[key] !== next[key]) {
+        diff[key] = next[key];
+      }
+    }
+    return diff;
+  }
+  function createStore(initialState) {
+    let current = initialState;
+    function commit(arg) {
+      const prev = current;
+      let next;
+      if (typeof arg === "function") {
+        next = arg(prev);
+      } else {
+        next = { ...prev };
+        for (const key in arg) {
+          const val = arg[key];
+          next[key] = typeof val === "function" ? val(prev) : val;
+        }
+      }
+      current = next;
+      const diff = shallowDiff(prev, next);
+      notifyNative(next, diff);
+      return { state: next, diff };
+    }
+    return {
+      getState: () => current,
+      commit
+    };
+  }
+
   // src/index.ts
   var http = new Http();
   globalThis.fetch = async (url) => {
@@ -231,58 +275,47 @@
   };
   var MAX = 100;
   var MIN = 0;
-  var count = 0;
-  var activity = "";
-  function state() {
-    const s = {
-      count,
-      canIncrement: count < MAX,
-      canDecrement: count > MIN,
-      activity
-    };
-    notify(s);
-    return s;
-  }
-  var observerRegistered = false;
-  function notify(s) {
-    if (observerRegistered) {
-      try {
-        const argsBuffer = YolkBin.encode([s]);
-        globalThis.__yolk_native_Observer?.("onStateChanged", argsBuffer);
-      } catch (e) {
-        console.error("[Yolk JS] Failed to notify native observer:", e);
-      }
-    }
-  }
+  var store = createStore({
+    count: 0,
+    canIncrement: true,
+    canDecrement: false,
+    activity: ""
+  });
   async function subscribe() {
-    observerRegistered = true;
-    state();
+    notifyNative(store.getState());
   }
   async function increment(step = 1) {
-    count = Math.min(MAX, count + step);
-    return state();
+    const { state } = store.commit((prev) => {
+      const count = Math.min(MAX, prev.count + step);
+      return { ...prev, count, canIncrement: count < MAX, canDecrement: count > MIN };
+    });
+    return state;
   }
   async function decrement(step = 1) {
-    count = Math.max(MIN, count - step);
-    return state();
+    const { state } = store.commit((prev) => {
+      const count = Math.max(MIN, prev.count - step);
+      return { ...prev, count, canIncrement: count < MAX, canDecrement: count > MIN };
+    });
+    return state;
   }
   async function reset() {
-    count = 0;
-    activity = "";
-    return state();
+    const { state } = store.commit({ count: 0, activity: "", canIncrement: true, canDecrement: false });
+    return state;
   }
   async function getState() {
-    return state();
+    return store.getState();
   }
   async function fetchActivity() {
+    let activity;
     try {
       const res = await fetch("https://dummyjson.com/quotes/random");
       const data = await res.json();
       activity = data.quote ? `"${data.quote}" \u2014 ${data.author}` : "Stay inspired!";
-    } catch (e) {
+    } catch {
       activity = "Failed to fetch quote";
     }
-    return state();
+    const { state } = store.commit({ activity });
+    return state;
   }
   async function processBuffer(buffer) {
     const view = new Uint8Array(buffer);
@@ -300,7 +333,6 @@
     subscribe,
     processBuffer,
     YolkBin
-    // Expose for the __yolk.call dispatcher
   };
   Object.assign(globalThis, exports);
   for (const [key, value] of Object.entries(exports)) {
