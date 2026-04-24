@@ -247,13 +247,13 @@ function HowItWorks() {
           {steps.map((step) => (
             <div
               key={step.label}
-              className="grid md:grid-cols-2 gap-8 items-start"
+              className="flex flex-col gap-6"
             >
               <div>
                 <div className="text-sm font-medium text-amber-400 mb-2">
                   {step.label}
                 </div>
-                <p className="text-zinc-300 leading-relaxed">
+                <p className="text-zinc-300 leading-relaxed max-w-2xl">
                   {step.description}
                 </p>
               </div>

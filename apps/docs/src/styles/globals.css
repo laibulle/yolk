@@ -49,4 +49,12 @@
   [data-rehype-pretty-code-title] + pre {
     @apply rounded-t-none;
   }
+
+  .shiki-block pre {
+    @apply bg-transparent! border-none! p-0! m-0!;
+  }
+
+  .shiki-block code {
+    @apply grid min-w-full break-words bg-transparent! p-0;
+  }
 }
