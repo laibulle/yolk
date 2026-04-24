@@ -17,6 +17,19 @@ export function generateSwift(spec: ModuleSpec): string {
     }
     lines.push(`}`)
     lines.push(``)
+
+    // Add YolkBinEncodable conformance
+    lines.push(`extension ${spec.state.name}: YolkBinEncodable {`)
+    lines.push(`    public func yolkBinFields() -> [String: Any?] {`)
+    lines.push(`        return [`)
+    const fieldLines = spec.state.properties.map((prop, i) => 
+      `            "${prop.name}": ${prop.name}${i < spec.state!.properties.length - 1 ? "," : ""}`
+    )
+    fieldLines.forEach(l => lines.push(l))
+    lines.push(`        ]`)
+    lines.push(`    }`)
+    lines.push(`}`)
+    lines.push(``)
   }
 
   lines.push(`/// Swift protocol for the "${spec.name}" module.`)
@@ -51,7 +64,7 @@ export function generateSwift(spec: ModuleSpec): string {
     const callArgs = method.params.map((p) => `${p.name}: ${p.name}`).join(", ")
     if (method.returnType === "void") {
       lines.push(`            _ = try await ${method.name}(${callArgs})`)
-      lines.push(`            return try YolkBin.encode(nil)`)
+      lines.push(`            return try YolkBin.encode(nil as Any?)`)
     } else {
       lines.push(`            let result = try await ${method.name}(${callArgs})`)
       lines.push(`            return try YolkBin.encode(${wrapSwiftResult(method.returnType, spec)})`)
@@ -101,11 +114,7 @@ function extractSwift(tsType: string, index: number): string {
 }
 
 function wrapSwiftResult(tsType: string, spec?: ModuleSpec): string {
-  // YolkBin.encode accepts Any?, so we just pass the result.
-  // We only need special handling for the generated state struct to make sure it's seen as a dictionary for TLV.
   if (spec?.state && tsType === spec.state.name) {
-      // Actually, YolkBin handles Codable? No, it handles [String: Any?].
-      // We should probably make YolkBin support Codable, but for now let's just return result.
       return "result"
   }
   return "result"

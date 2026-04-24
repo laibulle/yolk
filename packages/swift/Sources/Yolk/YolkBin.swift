@@ -87,8 +87,15 @@ public struct YolkBin {
             return
         }
 
-        // Handle Complex Encodables (generated structs)
+        // FAST PATH: Use custom binary protocol if available
+        if let yolkBinEncodable = value as? YolkBinEncodable {
+            try write(yolkBinEncodable.yolkBinFields(), to: &data)
+            return
+        }
+
+        // LAST RESORT: Handle Complex Encodables via JSON bridge (Warning: Performance overhead)
         if let encodable = value as? Encodable {
+            print("[YolkBin] Performance Warning: \(type(of: value)) is using JSON detour. Implement YolkBinEncodable for better performance.")
             let jsonData = try JSONEncoder().encode(encodable)
             var dict = try JSONSerialization.jsonObject(with: jsonData, options: .fragmentsAllowed)
             dict = cleanForJSON(dict)

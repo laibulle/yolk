@@ -10,6 +10,12 @@ public protocol YolkModule: Sendable {
     func handle(method: String, args: Data) async throws -> Data
 }
 
+/// Allows a type to provide its fields as a dictionary for YolkBin encoding,
+/// bypassing JSON serialization.
+public protocol YolkBinEncodable {
+    func yolkBinFields() -> [String: Any?]
+}
+
 public enum YolkError: Error, Sendable {
     case moduleNotFound(String)
     case invalidArgs(String)
