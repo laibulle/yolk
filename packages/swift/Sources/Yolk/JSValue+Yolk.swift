@@ -10,9 +10,6 @@ extension JSValue {
             print("[Yolk] toData: context is nil")
             return Data() 
         }
-        let ctx = context.jsGlobalContextRef
-        let val = self.jsValueRef
-        
         // Check if it's an ArrayBuffer
         let isBuffer = context.evaluateScript("(function(v) { return v instanceof ArrayBuffer; })").call(withArguments: [self]).toBool()
         

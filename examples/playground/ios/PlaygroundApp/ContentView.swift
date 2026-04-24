@@ -77,7 +77,7 @@ struct ContentView: View {
                             .font(.system(size: 14, weight: .semibold))
                             .padding()
                             .frame(maxWidth: .infinity)
-                            .background(Color.zinc800)
+                            .background(Color(red: 39/255, green: 39/255, blue: 42/255))
                             .foregroundColor(.white)
                             .cornerRadius(10)
                     }
