@@ -73,6 +73,16 @@ importers:
         specifier: ^5.4.0
         version: 5.9.3
 
+  packages/store:
+    dependencies:
+      '@yolk/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+    devDependencies:
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+
 packages:
 
   '@alloc/quick-lru@5.2.0':

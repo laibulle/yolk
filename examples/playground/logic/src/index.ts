@@ -1,5 +1,5 @@
 import { Http } from "./generated/Http"
-import { YolkBin } from "@yolk/sdk"
+import { createStore, notifyNative } from "@yolk/store"
 
 // Minimal fetch polyfill using our Native Http module
 const http = new Http();
@@ -15,9 +15,6 @@ const http = new Http();
 const MAX = 100
 const MIN = 0
 
-let count = 0
-let activity = ""
-
 type State = {
   count: number
   canIncrement: boolean
@@ -25,77 +22,63 @@ type State = {
   activity: string
 }
 
-function state(): State {
-  const s = {
-    count,
-    canIncrement: count < MAX,
-    canDecrement: count > MIN,
-    activity,
-  }
-  notify(s)
-  return s
-}
-
-// Subscription logic
-let observerRegistered = false
-function notify(s: State) {
-    if (observerRegistered) {
-        try {
-            // We use a convention: a module named "Observer" with an "onStateChanged" method
-            // In the buffer-only architecture, we MUST encode the arguments as an ArrayBuffer.
-            const argsBuffer = YolkBin.encode([s]);
-            (globalThis as any).__yolk_native_Observer?.("onStateChanged", argsBuffer)
-        } catch (e) {
-            console.error("[Yolk JS] Failed to notify native observer:", e);
-        }
-    }
-}
+const store = createStore<State>({
+  count: 0,
+  canIncrement: true,
+  canDecrement: false,
+  activity: "",
+})
 
 async function subscribe(): Promise<void> {
-    observerRegistered = true
-    state() // Push initial state
+  notifyNative(store.getState())
 }
 
 async function increment(step = 1): Promise<State> {
-  count = Math.min(MAX, count + step)
-  return state()
+  const { state } = store.commit(prev => {
+    const count = Math.min(MAX, prev.count + step)
+    return { ...prev, count, canIncrement: count < MAX, canDecrement: count > MIN }
+  })
+  return state
 }
 
 async function decrement(step = 1): Promise<State> {
-  count = Math.max(MIN, count - step)
-  return state()
+  const { state } = store.commit(prev => {
+    const count = Math.max(MIN, prev.count - step)
+    return { ...prev, count, canIncrement: count < MAX, canDecrement: count > MIN }
+  })
+  return state
 }
 
 async function reset(): Promise<State> {
-  count = 0
-  activity = ""
-  return state()
+  const { state } = store.commit({ count: 0, activity: "", canIncrement: true, canDecrement: false })
+  return state
 }
 
 async function getState(): Promise<State> {
-  return state()
+  return store.getState()
 }
 
 async function fetchActivity(): Promise<State> {
+  let activity: string
   try {
     const res = await fetch("https://dummyjson.com/quotes/random")
     const data = await res.json()
     activity = data.quote ? `"${data.quote}" — ${data.author}` : "Stay inspired!"
-  } catch (e) {
+  } catch {
     activity = "Failed to fetch quote"
   }
-  return state()
+  const { state } = store.commit({ activity })
+  return state
 }
 
 async function processBuffer(buffer: ArrayBuffer): Promise<ArrayBuffer> {
-    const view = new Uint8Array(buffer);
-    for (let i = 0; i < view.length; i++) {
-        view[i] = 255 - view[i]; // Invert bytes
-    }
-    return buffer;
+  const view = new Uint8Array(buffer);
+  for (let i = 0; i < view.length; i++) {
+    view[i] = 255 - view[i]!
+  }
+  return buffer
 }
 
-// Expose to the Yolk runtime as top-level globals
 const exports = {
   increment,
   decrement,
@@ -104,12 +87,10 @@ const exports = {
   fetchActivity,
   subscribe,
   processBuffer,
-  YolkBin, // Expose for the __yolk.call dispatcher
-};
+}
 
-Object.assign(globalThis, exports);
+Object.assign(globalThis, exports)
 
-// Backup for environments where Object.assign might have issues with globalThis
 for (const [key, value] of Object.entries(exports)) {
-    (globalThis as any)[key] = value;
+  (globalThis as any)[key] = value
 }
